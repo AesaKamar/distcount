@@ -1,0 +1,7 @@
+**/target
+.bsp/*
+.idea/*
+
+tmp/*
+
+.DS_Store

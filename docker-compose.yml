@@ -1,0 +1,22 @@
+version: '3'
+services:
+  statsd: # A metric collector and aggregator which listens asynchronously on udp
+    image: 'graphiteapp/graphite-statsd'
+    ports:
+      - "8080:8080"           # Internal non-proxied admin (nginx is proxying in the background under port 80 to provide encryption)
+      - "2003-2004:2003-2004" # carbon receiver
+      - "2023-2024:2023-2024" # carbon aggregator
+      - "8125:8125/udp"       # statsd
+      - "8126:8126"           # statsd admin
+    volumes:
+      - "./monitoringConfig/graphite/storage-schemas.conf:/opt/graphite/conf/storage-schemas.conf"
+      - "./monitoringConfig/statsd/udp.js:/opt/statsd/config/udp.js"
+      - "./tmp/statsdStorage:/opt/graphite/storage"
+  grafana: # A visualization frontend for metrics
+    image: 'grafana/grafana'
+    ports:
+      - "3000:3000"           # grafana UI
+    environment:
+      - GF_DASHBOARDS_MIN_REFRESH_INTERVAL=300ms
+    volumes:
+      - "./tmp/grafanaStorage:/var/lib/grafana"
