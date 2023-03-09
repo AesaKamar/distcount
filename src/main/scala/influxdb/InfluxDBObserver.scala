@@ -1,6 +1,7 @@
-package com.influxdb
+package influxdb
 
 import cats.Applicative
+import cats.effect.unsafe.IORuntime
 import cats.effect.{Async, Clock, IO, Resource}
 import fs2.Chunk
 import fs2.concurrent.Channel
@@ -18,7 +19,7 @@ final case class InfluxDBConfig(
 )
 
 trait InfluxDBObserver[F[_]] {
-  def startPublishing: fs2.Stream[F, LineProtocolMessage]
+  def startPublishing: fs2.Stream[F, Unit]
 
   def observeStreamThroughput(
       s: fs2.Stream[F, Chunk[Byte]]
@@ -30,34 +31,34 @@ object InfluxDBObserver {
   import cats.syntax.all._
   import org.http4s.implicits
 
-  def build[F[_]: Async](
+  def build(
       influxDBUri: String,
       influxDBAPIToken: String
-  ): Resource[F, InfluxDBObserver[F]] = {
-    val httpClient: Resource[F, Client[F]] = org.http4s.ember.client.EmberClientBuilder
-      .default[F]
+  ): Resource[IO, InfluxDBObserver[IO]] = {
+    val httpClient: Resource[IO, Client[IO]] = org.http4s.ember.client.EmberClientBuilder
+      .default[IO]
       .build
-    val channel: Resource[F, Channel[F, LineProtocolMessage]] =
-      Resource.eval(fs2.concurrent.Channel.unbounded[F, LineProtocolMessage])
+    val channel: Resource[IO, Channel[IO, LineProtocolMessage]] =
+      Resource.eval(fs2.concurrent.Channel.unbounded[IO, LineProtocolMessage])
 
     (httpClient, channel).mapN { case (client, channel) =>
-      new DefaultInfluxDBObserver[F](client, channel, influxDBUri, influxDBAPIToken, Clock[F])
+      new DefaultInfluxDBObserver(client, channel, influxDBUri, influxDBAPIToken, Clock[IO])
     }
   }
 
 }
 
-class DefaultInfluxDBObserver[F[_]: Async](
-    httpClient: org.http4s.client.Client[F],
-    channel: Channel[F, LineProtocolMessage],
+class DefaultInfluxDBObserver(
+    httpClient: org.http4s.client.Client[IO],
+    channel: Channel[IO, LineProtocolMessage],
     influxDBUri: String,
     influxDBAPIToken: String,
-    clock: Clock[F]
-) extends InfluxDBObserver[F] {
+    clock: Clock[IO]
+) extends InfluxDBObserver[IO] {
   import scala.util.chaining._
   import cats.syntax.all._
 
-  def startPublishing: fs2.Stream[F, LineProtocolMessage] = {
+  def startPublishing: fs2.Stream[IO, Unit] = {
 
 //    clock.monotonic
 //      .flatMap(ts =>
@@ -72,14 +73,17 @@ class DefaultInfluxDBObserver[F[_]: Async](
 //      )
 //      .productR(
     channel.stream
-      .evalTap(c => sendLineProtocolMessageToInfluxDb(Chunk(c)))
+      .chunkN(100)
+      .evalMap { c =>
+        sendLineProtocolMessageToInfluxDb(c)
+      }
 
 //      )
   }
 
   def observeStreamThroughput(
-      s: fs2.Stream[F, Chunk[Byte]]
-  )(name: String): fs2.Stream[F, Chunk[Byte]] =
+      s: fs2.Stream[IO, Chunk[Byte]]
+  )(name: String): fs2.Stream[IO, Chunk[Byte]] =
     s.evalTapChunk { ch =>
       clock.realTimeInstant
         .map(ts =>
@@ -104,7 +108,7 @@ class DefaultInfluxDBObserver[F[_]: Async](
   //    '
   def sendLineProtocolMessageToInfluxDb(
       lineProtocolMessages: Chunk[LineProtocolMessage]
-  ): F[Unit] = {
+  ): IO[Unit] = {
 
     val uriDataStruct = Uri(
       scheme = Some(value = Uri.Scheme.http),
@@ -126,12 +130,13 @@ class DefaultInfluxDBObserver[F[_]: Async](
       influxDBUri.appendedAll("/api/v2/write?org=aesakamar&bucket=distcount&precision=ns")
     )
 
-    val request: Request[F] = Request[F](
+    val request: Request[IO] = Request[IO](
       method = Method.POST,
       // TODO Refactor this to use InfluxDBConfig
       uri = uri,
       headers = Headers.apply(
-        org.http4s.headers.Authorization(Credentials.Token(AuthScheme.Bearer, influxDBAPIToken)),
+        org.http4s.headers
+          .Authorization(Credentials.Token(AuthScheme.Bearer, influxDBAPIToken)),
         org.http4s.headers.`Content-Type`(mediaType = MediaType.text.plain, Charset.`UTF-8`),
         org.http4s.headers.Accept(MediaRangeAndQValue.withDefaultQValue(MediaRange.`application/*`))
       ),
@@ -144,22 +149,11 @@ class DefaultInfluxDBObserver[F[_]: Async](
         .pipe(Entity.Strict)
     )
     for {
-//      _ <- Async[F].delay(
-//        pprint.log(
-//          lineProtocolMessages
-//            .map(_.encode)
-//            .toVector
-//            .mkString("\n")
-//        )
-//      )
-//      _ <- Async[F].delay(pprint.log(uri))
-      _ <- Async[F].delay(pprint.log(s"sending ${lineProtocolMessages.size} messages"))
       res <- httpClient
-        .stream(request)
-        .evalTap(res => Async[F].delay(pprint.log(res)))
-        .compile
-        .last
-      _ <- Async[F].delay(pprint.log(res))
+        .status(request)
+//        TODO Figure out why this is necessary with the IORuntime from CatsEffectSuite
+//        .startOn(IORuntime.global.compute)
+
     } yield {
       ()
     }

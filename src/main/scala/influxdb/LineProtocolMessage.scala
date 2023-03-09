@@ -1,4 +1,4 @@
-package com.influxdb
+package influxdb
 
 import java.time.temporal.ChronoUnit
 import java.time.{Duration, Instant, OffsetTime}
