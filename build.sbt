@@ -15,9 +15,12 @@ lazy val root = (project in file(".")).settings(
     "co.fs2"      %% "fs2-io"        % "3.6.1",
     "dev.kovstas" %% "fs2-throttler" % "1.0.6",
 //
-    "com.avast.cloud" %% "datadog4s-statsd" % "0.31.2",
-//
+    "com.avast.cloud" %% "datadog4s-statsd"    % "0.31.2",
+    "org.http4s"      %% "http4s-ember-client" % "1.0.0-M39",
+
+    //
     "org.typelevel" %% "munit-cats-effect-3" % "1.0.7" % Test,
     "com.lihaoyi"   %% "pprint"              % "0.8.1"
-  )
+  ),
+  tpolecatExcludeOptions ++= ScalacOptions.warnUnusedOptions
 )
