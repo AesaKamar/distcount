@@ -10,6 +10,8 @@ lazy val root = (project in file(".")).settings(
     "org.typelevel" %% "cats-effect-kernel" % "3.4.7",
     "org.typelevel" %% "cats-effect-std"    % "3.4.8",
 //
+    "org.typelevel" %% "discipline-core" % "1.5.1" % Test,
+//
     "co.fs2"      %% "fs2-core"      % "3.6.1",
     "co.fs2"      %% "fs2-scodec"    % "3.6.1",
     "co.fs2"      %% "fs2-io"        % "3.6.1",
