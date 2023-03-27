@@ -1,5 +1,7 @@
 package influxdb
 
+import cats.kernel.{BoundedSemilattice, Semilattice}
+
 import java.time.temporal.ChronoUnit
 import java.time.{Duration, Instant, OffsetTime}
 import scala.collection.immutable
@@ -10,7 +12,7 @@ import scala.concurrent.duration.FiniteDuration
 // environment,devId=b47f6944 Temp=21.00,Lat=50.087325,Lon=14.407154 1603091412
 // +---------+ +------------+ +------------------------------------+ +--------+
 // measurement tags           fields                                 timestamp
-case class LineProtocolMessage(
+final case class LineProtocolMessage(
     measurement: String,
     tags: SortedMap[String, String],
     fields: Map[String, Double],
@@ -25,8 +27,31 @@ case class LineProtocolMessage(
       else tags.map { case (k, v) => s"$k=$v" }.mkString(start = ",", sep = ",", end = "")
     val encodedFields: String = fields.map { case (k, v) => s"$k=$v" }.mkString(",")
 
-
     s"$measurement$encodedTags$encodedFields ${getNanos(timestamp)}"
   }
 }
-object LineProtocolMessage {}
+
+final case class MessageBucket(v: Vector[LineProtocolMessage])
+object MessageBucket {
+  // TODO Maybe consider making a [[cats.kernel.Order]] for this
+  implicit val evEq: cats.Eq[MessageBucket] =
+    cats.Eq.fromUniversalEquals
+
+  implicit val evBoundedSemilattice: BoundedSemilattice[MessageBucket] =
+    new BoundedSemilattice[MessageBucket] {
+      def empty: MessageBucket =
+        MessageBucket(Vector.empty)
+      def combine(x: MessageBucket, y: MessageBucket): MessageBucket =
+        MessageBucket(
+          Vector.concat(
+            x.v
+              .sortBy(x => (x.timestamp, x.measurement))
+              .distinctBy(x => (x.timestamp, x.measurement)),
+            y.v
+              .sortBy(x => (x.timestamp, x.measurement))
+              .distinctBy(x => (x.timestamp, x.measurement))
+          )
+        )
+
+    }
+}

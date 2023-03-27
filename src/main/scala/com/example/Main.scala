@@ -11,6 +11,9 @@ import scala.concurrent.duration.DurationInt
 object Main extends IOApp {
 
   override def run(args: List[String]): IO[ExitCode] = {
+    import scala.util.chaining._
+    import cats.syntax.monoid._
+    import cats.syntax.foldable._
 
     def runMapReduceWithObservations: IO[Unit] = {
 
@@ -32,16 +35,33 @@ object Main extends IOApp {
               .through(
                 Throttler.throttle(elements = 100, duration = 1.second, mode = Throttler.Shaping)
               )
-              .through(influx.observeStreamThroughput(_)("largeFileRead"))
+              .through(
+                influx.observeStreamThroughput(_)("largeFileRead")
+              )
+              .unchunks
               .concurrently(influx.startPublishing)
+              .through(fs2.text.utf8.decode)
+              .through(fs2.text.lines)
+              .through(s =>
+                Resplit.splitInclusive(s)(thisLine => chapterDelimitingRegex.matches(thisLine))
+              )
+              .map { s =>
+                s
+                  // Could do this or .filter(_.isEmpty) ish
+                  .map { line => line.split("\\s+").toVector.pipe(toOccurrenceMap) }
+                  .toVector
+                  .foldl(Map.empty[String, Long])((acc, i) => acc.combine(i))
+              // How to combine all of these into 1 Map[String, Long]
+              }
+              .evalTap(m => IO(pprint.log(m.maxBy(_._2))))
               .compile
-              .drain
+              .foldMonoid
               .*>(
                 IO
                   .sleep(1.second)
                   .*>(IO(pprint.log("😴")))
               )
-              .replicateA(3)
+//              .replicateA(3)
               .map(_ => ())
 
           } yield ()
@@ -49,5 +69,12 @@ object Main extends IOApp {
     }
     runMapReduceWithObservations.map(_ => ExitCode.Success)
   }
+
+  def toOccurrenceMap(wordsInLine: Vector[String]): Map[String, Long] =
+    wordsInLine
+      .groupBy(key => key)
+      .view
+      .mapValues(_.size.toLong)
+      .toMap
 
 }

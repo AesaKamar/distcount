@@ -1,7 +1,6 @@
 package influxdb
 
-import cats.Applicative
-import cats.effect.unsafe.IORuntime
+
 import cats.effect.{Async, Clock, IO, Resource}
 import fs2.Chunk
 import fs2.concurrent.Channel
@@ -13,7 +12,6 @@ import org.typelevel.ci.CIStringSyntax
 import scodec.bits.ByteVector
 
 import scala.collection.immutable.SortedMap
-import scala.io.Codec.UTF8
 
 final case class InfluxDBConfig(
 )
@@ -56,29 +54,13 @@ class DefaultInfluxDBObserver(
     clock: Clock[IO]
 ) extends InfluxDBObserver[IO] {
   import scala.util.chaining._
-  import cats.syntax.all._
 
   def startPublishing: fs2.Stream[IO, Unit] = {
-
-//    clock.monotonic
-//      .flatMap(ts =>
-//        channel.send(
-//          LineProtocolMessage(
-//            measurement = "s",
-//            tags = SortedMap.empty,
-//            fields = Map("throughputBytes" -> 100.0),
-//            timestamp = ts
-//          )
-//        )
-//      )
-//      .productR(
     channel.stream
       .chunkN(100)
       .evalMap { c =>
         sendLineProtocolMessageToInfluxDb(c)
       }
-
-//      )
   }
 
   def observeStreamThroughput(

@@ -10,7 +10,10 @@ lazy val root = (project in file(".")).settings(
     "org.typelevel" %% "cats-effect-kernel" % "3.4.7",
     "org.typelevel" %% "cats-effect-std"    % "3.4.8",
 //
-    "org.typelevel" %% "discipline-core" % "1.5.1" % Test,
+    "org.typelevel" %% "discipline-core"  % "1.5.1" % Test,
+    "org.typelevel" %% "cats-laws"        % "2.0.0" % Test,
+    "org.typelevel" %% "discipline-munit" % "1.0.9" % Test,
+
 //
     "co.fs2"      %% "fs2-core"      % "3.6.1",
     "co.fs2"      %% "fs2-scodec"    % "3.6.1",
@@ -21,8 +24,10 @@ lazy val root = (project in file(".")).settings(
     "org.http4s"      %% "http4s-ember-client" % "1.0.0-M39",
 
     //
+    "com.lihaoyi"   %% "pprint"              % "0.8.1",
     "org.typelevel" %% "munit-cats-effect-3" % "1.0.7" % Test,
-    "com.lihaoyi"   %% "pprint"              % "0.8.1"
+    "org.typelevel" %% "discipline-core"     % "1.5.1" % Test,
+    "org.typelevel" %% "discipline-munit"    % "1.0.9" % Test
   ),
   tpolecatExcludeOptions ++= ScalacOptions.warnUnusedOptions
 )
