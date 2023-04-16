@@ -46,11 +46,12 @@ object MessageBucket {
           Vector.concat(
             x.v
               .sortBy(x => (x.timestamp, x.measurement))
-              .distinctBy(x => (x.timestamp, x.measurement)),
+//              .distinctBy(x => (x.timestamp, x.measurement))
+            ,
             y.v
               .sortBy(x => (x.timestamp, x.measurement))
-              .distinctBy(x => (x.timestamp, x.measurement))
-          )
+//              .distinctBy(x => (x.timestamp, x.measurement))
+          ).sortBy(x => (x.timestamp, x.measurement))
         )
 
     }
