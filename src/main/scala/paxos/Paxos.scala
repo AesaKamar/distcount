@@ -85,7 +85,7 @@ final case class Learn(proposerId: ProposerId, value: String) extends PaxosMessa
 
 trait PaxosNode[F[_]] {
   val nodeId: NodeId
-  val transportLayerBinding: MessageTransport[F]
+  val transportLayer: MessageTransport[F]
   def receive(message: PaxosMessage): F[Unit]
 }
 
@@ -170,7 +170,7 @@ trait Proposer[F[_]] extends PaxosNode[F] {
       currentPrepareId <- prepareIdCounter.getAndUpdate(BoundedEnumerable[PrepareId].cycleNext)
       currentAcceptors <- knownAcceptors.get
       _ <- currentAcceptors.toList.traverse(acceptor =>
-        transportLayerBinding.send(acceptor.value, Prepare(proposerId, currentPrepareId, value))
+        transportLayer.send(acceptor.value, Prepare(proposerId, currentPrepareId, value))
       )
       _ <- promisesReceivedByAcceptors.update(_.updated(currentPrepareId, Set.empty))
     } yield ()
@@ -190,7 +190,7 @@ trait Proposer[F[_]] extends PaxosNode[F] {
             !currentAcceptedReceived.contains(prepareIdReceived)
           ) {
             currentAcceptors.toList.traverse(acceptor =>
-              transportLayerBinding.send(
+              transportLayer.send(
                 acceptor.value,
                 Accept(proposerId, prepareIdReceived, value)
               )
@@ -210,7 +210,7 @@ trait Proposer[F[_]] extends PaxosNode[F] {
         _ <-
           if (currentAcceptedReceived(prepareIdReceived).size > currentAcceptors.size / 2)
             currentAcceptors.toList.traverse(acceptor =>
-              transportLayerBinding.send(acceptor.value, Learn(proposerId, value))
+              transportLayer.send(acceptor.value, Learn(proposerId, value))
             )
           else
             Sync[F].unit
@@ -240,7 +240,7 @@ trait Acceptor[F[_]] extends PaxosNode[F] {
               .productR(Promise(acceptorId = acceptorId, prepareId, value).some.pure)
           else
             None.pure
-        _ <- response.traverse(transportLayerBinding.send(proposerId.value, _))
+        _ <- response.traverse(transportLayer.send(proposerId.value, _))
       } yield ()
 
     case Accept(proposerId, prepareId, value) =>
@@ -259,7 +259,7 @@ trait Acceptor[F[_]] extends PaxosNode[F] {
               )
           else
             None.pure
-        _ <- response.traverse(transportLayerBinding.send(proposerId.value, _))
+        _ <- response.traverse(transportLayer.send(proposerId.value, _))
       } yield ()
 
     case _ => Sync[F].unit
@@ -290,7 +290,7 @@ object PaxosNodeImpl {
 class PaxosNodeImpl[F[_]: Async](
     val nodeId: NodeId,
     val otherNodesRef: SignallingRef[F, List[PaxosNode[F]]],
-    val transportLayerBinding: MessageTransport[F],
+    val transportLayer: MessageTransport[F],
     initialSize: Int = 0
 )(implicit override implicit val evAsync: Async[F])
     extends Proposer[F]
